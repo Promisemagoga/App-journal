@@ -5,9 +5,13 @@ import { db, storage } from '../config/firebase';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { addDoc, collection } from 'firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
+import { TextInput } from 'react-native';
+import moment from 'moment/moment';
+
 
 function Jonurnal() {
   const [recording, setRecording] = React.useState();
+  const [recName, setRecName] = React.useState("")
 
   async function startRecording() {
     try {
@@ -48,6 +52,16 @@ function Jonurnal() {
     }
   }
 
+  const formattedDate = new Date().toLocaleString(undefined, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+
+
 
   //we are going to console.log the url of the audio , you can use it to play or store the recording
   async function stopRecording() {
@@ -56,21 +70,27 @@ function Jonurnal() {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI()
       const fileName = `journal${new Date().getTime()}`;
+      const status = await recording.getStatusAsync();
+      const durationMillis = status.durationMillis;
+      const duration = moment.duration(durationMillis);
+      const formattedDuration = moment.utc(duration.asMilliseconds()).format('HH:mm:ss');
       const recordPath = `recordings/${fileName}`
       const storageRef = ref(storage, recordPath)
       const uploadRecordings = uploadBytes(storageRef, uri).then(() => {
         getDownloadURL(storageRef).then(async (url) => {
           await addDoc(collection(db, "recordInfo"), {
-            date: new Date(),
+            date: formattedDate,
             recordingUrl: url,
-            fileName: fileName
+            fileName: fileName,
+            recName: recName,
+            duration: formattedDuration
           })
         })
       })
       setRecording(undefined)
       console.log("Recording stopped and stored at", uri);
 
-      playSound({uri})
+      playSound({ uri })
 
     } catch (error) {
       console.log(error);
@@ -79,10 +99,10 @@ function Jonurnal() {
 
   const [sound, setSound] = React.useState(null);
 
-  async function playSound({uri}) {
+  async function playSound({ uri }) {
     console.log('Loading Sound');
     const { sound } = await Audio.Sound.createAsync(
-      { uri: uri}
+      { uri: uri }
     );
     setSound(sound);
 
@@ -90,26 +110,36 @@ function Jonurnal() {
     await sound.playAsync();
   }
 
+  function handleTextChange(newFileName) {
+    setRecName(newFileName)
+  }
+
   const navigation = useNavigation();
- 
+
 
   return (
     <SafeAreaView style={styles.main}>
       <Text style={styles.heading}>Record</Text>
+      <TextInput
+        style={styles.recordingHeading}
+        placeholder="Enter heading..."
+        onChangeText={handleTextChange}
+        name = "heading"
+      />
       <Pressable style={styles.opacity} onPress={recording ? stopRecording : startRecording}>
-        {/* <View style={styles.btn}>{recording ? 'Stop recording' : 'Start Recording'}</View> */}
+
         <View style={styles.btn}>{recording ? <Image source={require('../assets/pause.png')} style={styles.recIcon} /> : <Image source={require('../assets/play.png')} style={styles.recIcon} />}</View>
       </Pressable>
       <View style={styles.bottomNav}>
         <Pressable onPress={() => navigation.navigate('Recordings')}>
-        <Image source={require('../assets/patient.png')} style={styles.img} />
+          <Image source={require('../assets/patient.png')} style={styles.img} />
         </Pressable>
-      <Pressable>
-      <Image source={require('../assets/microphone.png')} style={styles.img} />
-      </Pressable>
-       <Pressable>
-       <Image source={require('../assets/contact.png')} style={styles.img} />
-       </Pressable>
+        <Pressable onPress={() => navigation.navigate('Home')}>
+          <Image source={require('../assets/microphone.png')} style={styles.img} />
+        </Pressable>
+        <Pressable>
+          <Image source={require('../assets/contact.png')} style={styles.img} />
+        </Pressable>
       </View>
     </SafeAreaView>
   )
@@ -157,26 +187,35 @@ const styles = StyleSheet.create({
     // fontWeight: 650
   },
 
-  // btn: {
-  //   backgroundColor: "red",
-  //   width: 200,
-  //   height: 200,
-  //   borderRadius: "100%",
-  //   alignItems: "center",
-  //   justifyContent: "center"
+  btn: {
+    backgroundColor: "red",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    alignItems: "center",
+    justifyContent: "center"
+  },
 
+  opacity: {
+    backgroundColor: "#F7C5C2",
+    width: 250,
+    height: 250,
+    borderRadius: 150,
+    alignItems: "center",
+    justifyContent: "center"
+  },
 
-  // },
+  recordingHeading: {
+    marginLeft: "auto",
+    marginRight: "auto",
+    marginBottom: 50,
+    borderBottomWidth: 1,
+    width: 250,
+    height: 30
 
-  // opacity: {
-  //   backgroundColor: "#F7C5C2",
-  //   width: 250,
-  //   height: 250,
-  //   borderRadius: "100%",
-  //   alignItems: "center",
-  //   justifyContent: "center"
-  // }
+  }
 
 });
+
 
 export default Jonurnal
