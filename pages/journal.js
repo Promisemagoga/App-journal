@@ -69,24 +69,53 @@ function Jonurnal() {
       console.log('Stopping recording...');
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI()
-      const fileName = `journal${new Date().getTime()}`;
-      const status = await recording.getStatusAsync();
-      const durationMillis = status.durationMillis;
-      const duration = moment.duration(durationMillis);
-      const formattedDuration = moment.utc(duration.asMilliseconds()).format('HH:mm:ss');
-      const recordPath = `recordings/${fileName}`
-      const storageRef = ref(storage, recordPath)
-      const uploadRecordings = uploadBytes(storageRef, uri).then(() => {
-        getDownloadURL(storageRef).then(async (url) => {
-          await addDoc(collection(db, "recordInfo"), {
-            date: formattedDate,
-            recordingUrl: url,
-            fileName: fileName,
-            recName: recName,
-            duration: formattedDuration
+
+
+      const blob = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.onload = () => {
+          try {
+            resolve(xhr.response);
+          } catch (error) {
+            console.log("error:", error);
+          }
+        };
+        xhr.onerror = (e) => {
+          console.log(e);
+          reject(new TypeError("Network request failed"));
+        };
+        xhr.responseType = "blob";
+        xhr.open("GET", uri, true);
+        xhr.send(null);
+      });
+      if (blob != null) {
+        const fileName = `journal${new Date().getTime()}`;
+        const status = await recording.getStatusAsync();
+        const durationMillis = status.durationMillis;
+        const duration = moment.duration(durationMillis);
+        const formattedDuration = moment.utc(duration.asMilliseconds()).format('HH:mm:ss');
+        const recordPath = `recordings/${fileName}`
+        const storageRef = ref(storage, recordPath)
+        const uploadRecordings = uploadBytes(storageRef, blob).then(() => {
+          getDownloadURL(storageRef).then(async (url) => {
+            await addDoc(collection(db, "recordInfo"), {
+              date: formattedDate,
+              recordingUrl: url,
+              fileName: fileName,
+              recName: recName,
+              duration: formattedDuration
+            })
           })
         })
-      })
+
+      } else {
+        console.log("erroor with blob");
+      }
+
+
+
+
+     
       setRecording(undefined)
       console.log("Recording stopped and stored at", uri);
 
@@ -124,15 +153,15 @@ function Jonurnal() {
         style={styles.recordingHeading}
         placeholder="Enter heading..."
         onChangeText={handleTextChange}
-        name = "heading"
+        name="heading"
       />
       <Pressable style={styles.opacity} onPress={recording ? stopRecording : startRecording}>
 
-        <View style={styles.btn}>{recording ? <Image source={require('../assets/pause.png')} style={styles.recIcon} /> : <Image source={require('../assets/play.png')} style={styles.recIcon} />}</View>
+        <View style={styles.btn}>{recording ? <Image source={require('../assets/stop.png')} style={styles.recIcon} /> : <Image source={require('../assets/play.png')} style={styles.recIcon} />}</View>
       </Pressable>
       <View style={styles.bottomNav}>
         <Pressable onPress={() => navigation.navigate('Recordings')}>
-          <Image source={require('../assets/patient.png')} style={styles.img} />
+          <Image source={require('../assets/waveSound.png')} style={styles.img} />
         </Pressable>
         <Pressable onPress={() => navigation.navigate('Home')}>
           <Image source={require('../assets/microphone.png')} style={styles.img} />
@@ -184,7 +213,7 @@ const styles = StyleSheet.create({
     marginTop: 50,
     padding: 20,
     fontSize: 30,
-    // fontWeight: 650
+    fontWeight: "700"
   },
 
   btn: {
@@ -208,7 +237,7 @@ const styles = StyleSheet.create({
   recordingHeading: {
     marginLeft: "auto",
     marginRight: "auto",
-    marginBottom: 50,
+    marginBottom: "auto",
     borderBottomWidth: 1,
     width: 250,
     height: 30

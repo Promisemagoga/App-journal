@@ -1,6 +1,6 @@
 
 import { useNavigation } from '@react-navigation/native';
-import { collection, deleteDoc, doc, getDocs } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
 import * as React from 'react'
 import { Pressable, SafeAreaView, StyleSheet, Text, View, Image, ScrollView, Modal, TextInput } from 'react-native'
 import { db } from '../config/firebase';
@@ -9,10 +9,12 @@ import { Audio } from 'expo-av';
 
 function Recordings() {
     const [savedRecording, setSavedRecordings] = React.useState("")
+    const [updatedData, setUpdatedData] = React.useState([]);
 
     // const audioPlayer = new Audio('path/to/audio/file.mp3');
 
     const [sound, setSound] = React.useState(null);
+    const [heading, setHeading] = React.useState("");
 
 
     React.useEffect(() => {
@@ -21,35 +23,69 @@ function Recordings() {
 
 
     const getAudios = async () => {
-        try {
-            const querrySnapShot = await getDocs(collection(db, "recordInfo"));
-            const data = querrySnapShot.docs.map((doc) => ({
-                id: doc.id,
-                ...doc.data()
-            }))
-            setSavedRecordings(data)
-        } catch (error) {
-            console.log(error);
-        }
+        // try {
+        //     const querrySnapShot = await getDocs(collection(db, "recordInfo"));
+        //     const data = querrySnapShot.docs.map((doc) => ({
+        //         id: doc.id,
+        //         ...doc.data()
+        //     }))
+        //     setSavedRecordings(data)
+        // } catch (error) {
+        //     console.log(error);
+        // }
+
+        const colRef = collection(db, "recordInfo");
+        onSnapshot(colRef, (snapShot) => {
+            const audioArr = [];
+            snapShot.forEach((doc) => {
+                audioArr.push({
+                    id: doc.id,
+                    ...doc.data()
+                })
+
+            })
+            setSavedRecordings(audioArr)
+
+        })
+
     }
+
+    const [isPlaying, setIsPlaying] = React.useState(false);
+
 
     const playSound = async (recordingUrl) => {
         try {
-            const { sound } = await Audio.Sound.createAsync({ uri: recordingUrl });
-            setSound(sound);
-            await sound.playAsync();
+            if (isPlaying) {
+                await sound.stopAsync();
+            } else {
+                const { sound } = await Audio.Sound.createAsync({ uri: recordingUrl });
+                setSound(sound);
+                await sound.playAsync();
+            }
+            setIsPlaying(!isPlaying);
         } catch (error) {
             console.log('Error playing sound', error);
         }
     };
 
-    React.useEffect(() => {
-        return sound
-            ? () => {
-                sound.unloadAsync();
-            }
-            : undefined;
-    }, [sound]);
+
+    // const playSound = async (recordingUrl) => {
+    //     try {
+    //         const { sound } = await Audio.Sound.createAsync({ uri: recordingUrl });
+    //         setSound(sound);
+    //         await sound.playAsync();
+    //     } catch (error) {
+    //         console.log('Error playing sound', error);
+    //     }
+    // };
+
+    // React.useEffect(() => {
+    //     return sound
+    //         ? () => {
+    //             sound.unloadAsync();
+    //         }
+    //         : undefined;
+    // }, [sound]);
 
 
 
@@ -71,15 +107,44 @@ function Recordings() {
     }
 
 
+
+
     const [isModalVisible, setIsModalVisible] = React.useState(false);
 
-    const toggleModal = () => {
+    const toggleModal = (data) => {
         setIsModalVisible(!isModalVisible);
+        setUpdatedData(data);
     };
 
 
-    
+    const updateFunc = async () => {
+        const docId = updatedData.id;
 
+        const data = {
+            date: updatedData.date,
+            recordingUrl: updatedData.recordingUrl,
+            fileName: updatedData.fileName,
+            recName: heading,
+            duration: updatedData.duration
+        }
+
+        const docRef = doc(db, 'recordInfo', docId);
+        await updateDoc(docRef, data)
+            .then(() => {
+                console.log("Data successfully Updated");
+                setIsModalVisible(false)
+            })
+            .catch((error) => {
+                console.log("Error updating data:", error);
+            })
+
+    };
+
+
+
+    function handleChange(text) {
+        setHeading(text)
+    }
 
     return (
         <SafeAreaView style={styles.main}>
@@ -88,28 +153,29 @@ function Recordings() {
                 <View style={styles.scrollCon}>
                     {savedRecording ? (
                         savedRecording.map((data) => (
-                            <View style={styles.card} key={data.id}>
+                            <View style={[styles.card, styles.elevation]} key={data.id}>
                                 <View style={styles.cardHeader}>
                                     <Text style={styles.textColor}>{data.recName}</Text>
                                     <Text style={styles.textColor}>{data.date}</Text>
                                 </View>
                                 <View style={styles.cardBottom}>
-                                    <View style={styles.rec}>
-                                        <View>
-                                            <Text>Your talking time</Text>
-                                            <Text>{data.duration}</Text>
-                                        </View>
-                                        <Pressable onPress={() => playSound(data.recordingUrl)} style={styles.play}>
-                                            <Text style={styles.textColor}>Play Sound</Text>
-                                        </Pressable>
+
+                                    <View>
+                                        <Text style={styles.talkingText}>Your talking time</Text>
+                                        <Text>{data.duration}</Text>
                                     </View>
-                                    <View style={styles.crudBtn}>
-                                        <Pressable style={styles.crudButton} onPress={() => deleteFunc(data.id)}>
-                                            <Text style={styles.crudText}>Delete</Text>
+                                    <View style={styles.buttons}>
+                                        <Pressable onPress={() => playSound(data.recordingUrl)} style={styles.play}>
+                                            <Text style={styles.textColor}>{isPlaying ? 'Pause' : 'Play'}</Text>
                                         </Pressable>
-                                        <Pressable style={styles.crudButton}>
-                                            <Text style={styles.crudText} onPress={toggleModal} >Update</Text>
-                                        </Pressable>
+                                        <View style={styles.crudBtn}>
+                                            <Pressable style={styles.crudButton} onPress={() => deleteFunc(data.id)}>
+                                                <Text style={styles.crudText}>Delete</Text>
+                                            </Pressable>
+                                            <Pressable style={styles.crudButton} onPress={() => toggleModal(data)} >
+                                                <Text style={styles.crudText} >Update</Text>
+                                            </Pressable>
+                                        </View>
                                     </View>
                                 </View>
                             </View>
@@ -118,22 +184,22 @@ function Recordings() {
                         <Text>No recordings found.</Text>
                     )}
                 </View>
-                <Modal visible={isModalVisible}>
-                    <View>
+                <Modal visible={isModalVisible} >
+                    <View style={styles.modal} >
                         <TextInput
                             placeholder="Enter heading..."
-                            // onChangeText={handleTextChange}
+                            onChangeText={(text) => handleChange(text)}
                             style={styles.recordingHeading}
                         />
-                        <Pressable>
-                            <Text>Save Changes</Text>
+                        <Pressable onPress={updateFunc} style={styles.updatebtn}>
+                            <Text style={styles.textColor}>Save Changes</Text>
                         </Pressable>
                     </View>
                 </Modal>
             </ScrollView>
             <View style={styles.bottomNav}>
                 <Pressable onPress={() => navigation.navigate('Recordings')}>
-                    <Image source={require('../assets/patient.png')} style={styles.img} />
+                    <Image source={require('../assets/waveSound.png')} style={styles.img} />
                 </Pressable>
                 <Pressable onPress={() => navigation.navigate('Home')}>
                     <Image source={require('../assets/microphone.png')} style={styles.img} />
@@ -159,11 +225,10 @@ const styles = StyleSheet.create({
         flex: 1
     },
     heading: {
-        // marginBottom: "auto",
         marginTop: 50,
         padding: 20,
         fontSize: 30,
-        // fontWeight: 650
+        fontWeight: "700"
     },
 
     card: {
@@ -172,9 +237,17 @@ const styles = StyleSheet.create({
         marginTop: "auto",
         marginBottom: 20,
         boxShadow: "rgba(0, 0, 0, 0.24) 0px 3px 8px",
+        //     shadowColor: '#000',  
+        //    elevation: 7, 
         borderRadius: 10
 
     },
+
+    // elevation:{
+
+    //     shadowColor: '#000',  
+    //     elevation: 7, 
+    // },
 
     cardHeader: {
         backgroundColor: "red",
@@ -189,6 +262,8 @@ const styles = StyleSheet.create({
         marginBottom: "auto",
         height: 150,
         padding: 10,
+        borderWidth: 2,
+        borderColor: "red"
     },
 
     textColor: {
@@ -200,7 +275,7 @@ const styles = StyleSheet.create({
         marginTop: "auto",
         display: 'flex',
         flexDirection: "row",
-        boxShadow: "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
+        // boxShadow: "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
         width: "100%",
         justifyContent: "space-between",
         padding: 20
@@ -214,17 +289,20 @@ const styles = StyleSheet.create({
     crudBtn: {
         display: "flex",
         flexDirection: "row",
-        marginLeft: "auto",
-        marginTop: "auto",
         width: 130,
         justifyContent: "space-between",
 
     },
 
+    buttons: {
+        marginTop: "auto",
+        display: "flex",
+        flexDirection: "row",
+        justifyContent: "space-between"
+    },
+
     play: {
-        // marginTop: 30,
-        marginLeft: "auto",
-        marginRight: "auto",
+        marginTop: "auto",
         backgroundColor: "red",
         width: 100,
         height: 30,
@@ -232,6 +310,13 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         borderRadius: 20
 
+    },
+
+    updatebtn: {
+        marginTop: 50,
+        backgroundColor: "red",
+        padding: 10,
+        borderRadius: 5
     },
 
     crudButton: {
@@ -250,24 +335,31 @@ const styles = StyleSheet.create({
         alignItems: "center"
     },
 
-    rec: {
-        display: "flex",
-        flexDirection: "row",
-        justifyContent: "space-between",
-        width: 400
-
+    talkingText: {
+        fontWeight: "500"
     },
 
     recordingHeading: {
         marginLeft: "auto",
         marginRight: "auto",
-        
         marginTop: 50,
-        borderBottomWidth: 1,
+        borderWidth: 1,
         width: 250,
-        height: 30
-    
-      }
+        height: 50
+
+    },
+    crudText: {
+        color: "red"
+    },
+
+    modal: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center"
+
+    }
+
 })
 
 export default Recordings
